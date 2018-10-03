@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+		<title>Video Uploader</title>
+		<script src="./socket.io-client/dist/socket.io.js"></script>
+		<script src="/moment.min.js"></script>
+		<script type="text/javascript" charset="utf-8">
+			window.addEventListener("load", Ready); 
+			
+			function Ready(){ 
+				if(window.File && window.FileReader){ //These are the necessary HTML5 objects the we are going to use 
+					document.getElementById('UploadButton').addEventListener('click', parseFile);  
+					document.getElementById('FileBox').addEventListener('change', FileChosen);
+				}
+				else
+				{
+					document.getElementById('UploadArea').innerHTML = "Your Browser Doesn't Support The File API Please Update Your Browser";
+				}
+			}
+			var SelectedFile;
+			function FileChosen(evnt) {
+		        SelectedFile = evnt.target.files[0];
+				document.getElementById('NameBox').value = SelectedFile.name;
+		    }
+		
+			var socket = io.connect('http://localhost:8080');
+			var FReader;
+			var Name;
+			function StartUpload(){
+				if(document.getElementById('FileBox').value != "")
+				{
+					FReader = new FileReader();
+					Name = document.getElementById('NameBox').value;
+
+					FReader.onload = function(evnt){
+						console.log("upload")
+						socket.emit('Upload', { 'Name' : Name, Data : evnt.target.result });
+					}
+					console.log("upload-start")
+					socket.emit('Start', { 'Name' : Name, 'Size' : SelectedFile.size });
+				}
+				else
+				{
+					alert("Please Select A File");
+				}
+			}
+			
+			socket.on('MoreData', function (data){
+				console.log("more data ",data)
+				UpdateBar(data['Percent']);
+				var Place = data['Place'] * 524288; //The Next Blocks Starting Position
+				var NewFile; //The Variable that will hold the new Block of Data
+				console.log ("SelectedFile SelectedFile SelectedFile", SelectedFile.slice(Place, Place + Math.min(524288, (SelectedFile.size-Place))));
+				NewFile = SelectedFile.slice(Place, Place + Math.min(524288, (SelectedFile.size-Place)));
+				FReader.readAsBinaryString(NewFile);
+			});
+
+
+			
+			function UpdateBar(percent){
+				document.getElementById('ProgressBar').style.width = percent + '%';
+				document.getElementById('percent').innerHTML = (Math.round(percent*100)/100) + '%';
+				var MBDone = Math.round(((percent/100.0) * SelectedFile.size) / 1048576);
+				document.getElementById('MB').innerHTML = MBDone;
+			}
+			
+			var Path = "http://localhost/";
+			
+			socket.on('Done', function (data){
+				var Content = "Video Successfully Uploaded !!"
+				Content += "<img id='Thumb' src='" + Path + data['Image'] + "' alt='" + Name + "'><br>";
+				Content += "<button	type='button' name='Upload' value='' id='Restart' class='Button'>Upload Another</button>";
+				document.getElementById('UploadArea').innerHTML = Content;
+				document.getElementById('Restart').addEventListener('click', Refresh);
+				document.getElementById('UploadBox').style.width = '270px';
+				document.getElementById('UploadBox').style.height = '270px';
+				document.getElementById('UploadBox').style.textAlign = 'center';
+				document.getElementById('Restart').style.left = '20px';
+			});
+			function Refresh(){
+				location.reload(true);
+			}
+			
+			
+
+
+
+
+
+
+function parseFile(file, callback) {
+    var fileSize   = file.size;
+    var chunkSize  = 64 * 1024; // bytes
+    var offset     = 0;
+    var self       = this; // we need a reference to the current object
+    var chunkReaderBlock = null;
+
+    var readEventHandler = function(evt) {
+        if (evt.target.error == null) {
+            offset += evt.target.result.length;
+            callback(evt.target.result); // callback for handling read chunk
+        } else {
+            console.log("Read error: " + evt.target.error);
+            return;
+        }
+        if (offset >= fileSize) {
+            console.log("Done reading file");
+            return;
+        }
+
+        // of to the next chunk
+        chunkReaderBlock(offset, chunkSize, file);
+    }
+
+    chunkReaderBlock = function(_offset, length, _file) {
+        var r = new FileReader();
+        var blob = _file.slice(_offset, length + _offset);
+        r.onload = readEventHandler;
+        r.readAsText(blob);
+    }
+
+    // now let's start the read with the first block
+    chunkReaderBlock(offset, chunkSize, file);
+}
+
+
+
+
+var start = moment("2018-09-29", "YYYY-MM-DD");
+var end = moment("2018-10-4", "YYYY-MM-DD");
+const daysLength = moment.duration(start.diff(end)).asDays();
+let days = [];
+for (let index = 0; index < daysLength; index++) {
+	days.push(moment(start).add(+index, 'days').format("ddd"))
+}
+console.log("days ",days);
+
+
+
+
+
+			
+		</script>
+	
+	</head>
+	<body> 
+		<div id="UploadBox">
+			<h2>Video Uploader</h2>
+			<span id='UploadArea'>
+				<label for="FileBox">Choose A File: </label><input type="file" id="FileBox"><br>
+				<label for="NameBox">Name: </label><input type="text" id="NameBox"><br>
+				<button	type='button' id='UploadButton' class='Button'>Upload</button>
+			</span>
+		</div>
+	</body>
+</html>
